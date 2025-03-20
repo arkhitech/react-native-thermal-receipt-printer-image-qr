@@ -1,4 +1,5 @@
 package com.pinmi.react.printer;
+import com.dantsu.escposprinter.exceptions.EscPosConnectionException;
 import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReactMethod;
 
@@ -21,6 +22,6 @@ public interface RNPrinterModule {
     public void printImageData(String imageUrl, int imageWidth, int imageHeight, Callback errorCallback);
 
     @ReactMethod
-    public void printImageBase64(String base64, int imageWidth, int imageHeight, Callback errorCallback) ;
+    public void printImageBase64(String base64, int imageWidth, int imageHeight, Callback errorCallback) throws EscPosConnectionException;
 }
 

@@ -1,5 +1,5 @@
 //
-//  RNNetPrinter.m
+//  RNNetPromisePrinter.m
 //  RNThermalReceiptPrinter
 //
 //  Created by MTT on 06/11/19.
@@ -7,7 +7,7 @@
 //
 
 
-#import "RNNetPrinter.h"
+#import "RNNetPromisePrinter.h"
 #import "PrivateIP.h"
 #import "PrinterSDK.h"
 #include <ifaddrs.h>
@@ -15,10 +15,10 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
-NSString *const EVENT_SCANNER_RESOLVED = @"scannerResolved";
-NSString *const EVENT_SCANNER_RUNNING = @"scannerRunning";
+NSString *const EVENT_PROMISE_SCANNER_RESOLVED = @"scannerResolved";
+NSString *const EVENT_PROMISE_SCANNER_RUNNING = @"scannerRunning";
 
-@implementation RNNetPrinter
+@implementation RNNetPromisePrinter
 
 - (dispatch_queue_t)methodQueue
 {
@@ -28,32 +28,33 @@ RCT_EXPORT_MODULE()
 
 - (NSArray<NSString *> *)supportedEvents
 {
-    return @[EVENT_SCANNER_RESOLVED, EVENT_SCANNER_RUNNING];
+    return @[EVENT_PROMISE_SCANNER_RESOLVED, EVENT_PROMISE_SCANNER_RUNNING];
 }
 
-RCT_EXPORT_METHOD(init:(RCTResponseSenderBlock)successCallback
-                  fail:(RCTResponseSenderBlock)errorCallback) {
+RCT_EXPORT_METHOD(init:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
     connected_ip = nil;
     is_scanning = NO;
     _printerArray = [NSMutableArray new];
-    successCallback(@[@"Init successful"]);
+    resolve(@[@"Init successful"]);
 }
 
-RCT_EXPORT_METHOD(getDeviceList:(RCTResponseSenderBlock)successCallback
-                  fail:(RCTResponseSenderBlock)errorCallback) {
+RCT_EXPORT_METHOD(getDeviceList:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handlePrinterConnectedNotification:) name:PrinterConnectedNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleBLEPrinterConnectedNotification:) name:@"BLEPrinterConnected" object:nil];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [self scan:successCallback];
+        [self scan:resolve rejecter: reject];
     });
 }
 
-- (void) scan: (RCTResponseSenderBlock)successCallback {
+- (void) scan:(RCTPromiseResolveBlock)resolve
+              rejecter:(RCTPromiseRejectBlock)reject {
     @try {
         PrivateIP *privateIP = [[PrivateIP alloc]init];
         NSString *localIP = [privateIP getIPAddress];
         is_scanning = YES;
-        [self sendEventWithName:EVENT_SCANNER_RUNNING body:@YES];
+        [self sendEventWithName:EVENT_PROMISE_SCANNER_RUNNING body:@YES];
         _printerArray = [NSMutableArray new];
 
         NSString *prefix = [localIP substringToIndex:([localIP rangeOfString:@"." options:NSBackwardsSearch].location)];
@@ -71,15 +72,16 @@ RCT_EXPORT_METHOD(getDeviceList:(RCTResponseSenderBlock)successCallback
         NSArray *arrayWithoutDuplicates = [orderedSet array];
         _printerArray = (NSMutableArray *)arrayWithoutDuplicates;
 
-        [self sendEventWithName:EVENT_SCANNER_RESOLVED body:_printerArray];
+        [self sendEventWithName:EVENT_PROMISE_SCANNER_RESOLVED body:_printerArray];
 
-        successCallback(@[_printerArray]);
+        resolve(@[_printerArray]);
     } @catch (NSException *exception) {
         NSLog(@"No connection");
+        reject(exception.name, exception.reason, nil);
     }
     [[PrinterSDK defaultPrinterSDK] disconnect];
     is_scanning = NO;
-    [self sendEventWithName:EVENT_SCANNER_RUNNING body:@NO];
+    [self sendEventWithName:EVENT_PROMISE_SCANNER_RUNNING body:@NO];
 }
 
 - (void)handlePrinterConnectedNotification:(NSNotification*)notification
@@ -96,24 +98,25 @@ RCT_EXPORT_METHOD(getDeviceList:(RCTResponseSenderBlock)successCallback
 
 RCT_EXPORT_METHOD(connectPrinter:(NSString *)host
                   withPort:(nonnull NSNumber *)port
-                  success:(RCTResponseSenderBlock)successCallback
-                  fail:(RCTResponseSenderBlock)errorCallback) {
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
     @try {
         BOOL isConnectSuccess = [[PrinterSDK defaultPrinterSDK] connectIP:host];
         !isConnectSuccess ? [NSException raise:@"Invalid connection" format:@"Can't connect to printer %@", host] : nil;
 
         connected_ip = host;
         [[NSNotificationCenter defaultCenter] postNotificationName:@"NetPrinterConnected" object:nil];
-        successCallback(@[[NSString stringWithFormat:@"Connecting to printer %@", host]]);
+        resolve(@[[NSString stringWithFormat:@"Connecting to printer %@", host]]);
 
     } @catch (NSException *exception) {
-        errorCallback(@[exception.reason]);
+        reject(exception.name, exception.reason, nil);
     }
 }
 
 RCT_EXPORT_METHOD(printRawData:(NSString *)text
                   printerOptions:(NSDictionary *)options
-                  fail:(RCTResponseSenderBlock)errorCallback) {
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
     @try {
         NSNumber* beepPtr = [options valueForKey:@"beep"];
         NSNumber* cutPtr = [options valueForKey:@"cut"];
@@ -127,14 +130,16 @@ RCT_EXPORT_METHOD(printRawData:(NSString *)text
         [[PrinterSDK defaultPrinterSDK] printText:text];
         beep ? [[PrinterSDK defaultPrinterSDK] beep] : nil;
         cut ? [[PrinterSDK defaultPrinterSDK] cutPaper] : nil;
+        resolve(@"done");
     } @catch (NSException *exception) {
-        errorCallback(@[exception.reason]);
+        reject(exception.name, exception.reason, nil);
     }
 }
 
 RCT_EXPORT_METHOD(printImageData:(NSString *)imgUrl
                   printerOptions:(NSDictionary *)options
-                  fail:(RCTResponseSenderBlock)errorCallback) {
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
     @try {
 
         !connected_ip ? [NSException raise:@"Invalid connection" format:@"Can't connect to printer"] : nil;
@@ -156,22 +161,22 @@ RCT_EXPORT_METHOD(printImageData:(NSString *)imgUrl
             [[PrinterSDK defaultPrinterSDK] setPrintWidth:printerWidth];
             [[PrinterSDK defaultPrinterSDK] printImage:printImage ];
         }
+        resolve(@"done");
 
     } @catch (NSException *exception) {
-        errorCallback(@[exception.reason]);
+        reject(exception.name, exception.reason, nil);
     }
 }
 
 RCT_EXPORT_METHOD(printImageBase64:(NSString *)base64Qr
                   printerOptions:(NSDictionary *)options
-                  fail:(RCTResponseSenderBlock)errorCallback) {
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
     @try {
 
         !connected_ip ? [NSException raise:@"Invalid connection" format:@"Can't connect to printer"] : nil;
         if(![base64Qr  isEqual: @""]){
-            NSString *result = [@"data:image/png;base64," stringByAppendingString:base64Qr];
-            NSURL *url = [NSURL URLWithString:result];
-            NSData *imageData = [NSData dataWithContentsOfURL:url];
+            NSData *imageData = [[NSData alloc] initWithBase64EncodedString:base64Qr options:0];
             NSString* printerWidthType = [options valueForKey:@"printerWidthType"];
 
             NSInteger printerWidth = 576;
@@ -187,9 +192,10 @@ RCT_EXPORT_METHOD(printImageBase64:(NSString *)base64Qr
                 [[PrinterSDK defaultPrinterSDK] setPrintWidth:printerWidth];
                 [[PrinterSDK defaultPrinterSDK] printImage:printImage ];
             }
+            resolve(@"done");
         }
     } @catch (NSException *exception) {
-        errorCallback(@[exception.reason]);
+        reject(exception.name, exception.reason, nil);
     }
 }
 
@@ -201,17 +207,17 @@ RCT_EXPORT_METHOD(printImageBase64:(NSString *)base64Qr
    NSNumber* nPaddingX = [options valueForKey:@"paddingX"];
 
    CGFloat newWidth = 150;
-   if(nWidth != nil) {
+   if(nWidth != nil && ![[NSNull null] isEqual:nWidth]) {
        newWidth = [nWidth floatValue];
    }
 
    CGFloat newHeight = image.size.height;
-   if(nHeight != nil) {
+   if(nHeight != nil && ![[NSNull null] isEqual:nHeight]) {
        newHeight = [nHeight floatValue];
    }
 
    CGFloat paddingX = 250;
-   if(nPaddingX != nil) {
+   if(nPaddingX != nil && ![[NSNull null] isEqual:nPaddingX]) {
        paddingX = [nPaddingX floatValue];
    }
 
@@ -258,13 +264,16 @@ RCT_EXPORT_METHOD(printImageBase64:(NSString *)base64Qr
     return paddedImage;
 }
 
-RCT_EXPORT_METHOD(closeConn) {
+RCT_EXPORT_METHOD(closeConn:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
     @try {
         !connected_ip ? [NSException raise:@"Invalid connection" format:@"Can't connect to printer"] : nil;
         [[PrinterSDK defaultPrinterSDK] disconnect];
         connected_ip = nil;
+        resolve(@"done");
     } @catch (NSException *exception) {
         NSLog(@"%@", exception.reason);
+        reject(exception.name, exception.reason, nil);
     }
 }
 

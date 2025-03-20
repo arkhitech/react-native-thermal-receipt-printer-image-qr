@@ -173,8 +173,8 @@ var textTo64Buffer = function (text, opts) {
     encoding: "UTF8",
   };
   var options = __assign(__assign({}, defaultOptions), opts);
-  var fixAndroid = "\n";
-  var buffer = EPToolkit.exchange_text(text + fixAndroid, options);
+  // var fixAndroid = "\n";
+  var buffer = EPToolkit.exchange_text(text, options);
   return buffer.toString("base64");
 };
 var billTo64Buffer = function (text, opts) {

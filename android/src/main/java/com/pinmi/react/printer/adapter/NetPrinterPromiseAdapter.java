@@ -16,7 +16,7 @@ import android.util.Log;
 
 import com.dantsu.escposprinter.exceptions.EscPosConnectionException;
 import com.facebook.react.bridge.Arguments;
-import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
@@ -40,8 +40,8 @@ import androidx.annotation.RequiresApi;
  * Created by xiesubin on 2017/9/22.
  */
 
-public class NetPrinterAdapter implements PrinterAdapter {
-    private static NetPrinterAdapter mInstance;
+public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
+    private static NetPrinterPromiseAdapter mInstance;
     private ReactApplicationContext mContext;
     private final String LOG_TAG = "RNNetPrinter";
     private NetPrinterDevice mNetDevice;
@@ -63,27 +63,27 @@ public class NetPrinterAdapter implements PrinterAdapter {
 
     private boolean isRunning = false;
 
-    private NetPrinterAdapter() {
+    private NetPrinterPromiseAdapter() {
 
     }
 
-    public static NetPrinterAdapter getInstance() {
+    public static NetPrinterPromiseAdapter getInstance() {
         if (mInstance == null) {
-            mInstance = new NetPrinterAdapter();
+            mInstance = new NetPrinterPromiseAdapter();
 
         }
         return mInstance;
     }
 
     @Override
-    public void init(ReactApplicationContext reactContext, Callback successCallback, Callback errorCallback) {
+    public void init(ReactApplicationContext reactContext, Promise promise) {
         this.mContext = reactContext;
-        successCallback.invoke();
+        promise.resolve("done");
     }
 
     @Override
-    public List<PrinterDevice> getDeviceList(Callback errorCallback) {
-        // errorCallback.invoke("do not need to invoke get device list for net
+    public List<PrinterDevice> getDeviceList(Promise promise) {
+        // promise.reject("do not need to invoke get device list for net
         // printer");
         // Use emitter instancee get devicelist to non block main thread
         this.scan();
@@ -173,13 +173,13 @@ public class NetPrinterAdapter implements PrinterAdapter {
     }
 
     @Override
-    public void selectDevice(PrinterDeviceId printerDeviceId, Callback sucessCallback, Callback errorCallback) {
+    public void selectDevice(PrinterDeviceId printerDeviceId, Promise promise) {
         NetPrinterDeviceId netPrinterDeviceId = (NetPrinterDeviceId) printerDeviceId;
 
         if (this.mSocket != null && !this.mSocket.isClosed()
                 && mNetDevice.getPrinterDeviceId().equals(netPrinterDeviceId)) {
             Log.i(LOG_TAG, "already selected device, do not need repeat to connect");
-            sucessCallback.invoke(this.mNetDevice.toRNWritableMap());
+            promise.resolve(this.mNetDevice.toRNWritableMap());
             return;
         }
 
@@ -189,15 +189,15 @@ public class NetPrinterAdapter implements PrinterAdapter {
                 closeConnectionIfExists();
                 this.mSocket = socket;
                 this.mNetDevice = new NetPrinterDevice(netPrinterDeviceId.getHost(), netPrinterDeviceId.getPort());
-                sucessCallback.invoke(this.mNetDevice.toRNWritableMap());
+                promise.resolve(this.mNetDevice.toRNWritableMap());
             } else {
-                errorCallback.invoke("unable to build connection with host: " + netPrinterDeviceId.getHost()
+                promise.reject("unable to build connection with host: " + netPrinterDeviceId.getHost()
                         + ", port: " + netPrinterDeviceId.getPort());
                 return;
             }
         } catch (IOException e) {
             e.printStackTrace();
-            errorCallback.invoke("failed to connect printer: " + e.getMessage());
+            promise.reject("failed to connect printer: " + e.getMessage());
         }
     }
 
@@ -218,9 +218,9 @@ public class NetPrinterAdapter implements PrinterAdapter {
     }
 
     @Override
-    public void printRawData(String rawBase64Data, Callback errorCallback) {
+    public void printRawData(String rawBase64Data, Promise promise) {
         if (this.mSocket == null) {
-            errorCallback.invoke("Net connection is not built, may be you forgot to connectPrinter");
+            promise.reject("Net connection is not built, may be you forgot to connectPrinter");
             return;
         }
         final String rawData = rawBase64Data;
@@ -234,6 +234,7 @@ public class NetPrinterAdapter implements PrinterAdapter {
                     OutputStream printerOutputStream = socket.getOutputStream();
                     printerOutputStream.write(bytes, 0, bytes.length);
                     printerOutputStream.flush();
+                    promise.resolve("done");
                 } catch (IOException e) {
                     Log.e(LOG_TAG, "failed to print data" + rawData);
                     e.printStackTrace();
@@ -244,7 +245,7 @@ public class NetPrinterAdapter implements PrinterAdapter {
     }
 
     @Override
-    public void printImageData(final String imageUrl, int imageWidth, int imageHeight, Callback errorCallback) {
+    public void printImageData(final String imageUrl, int imageWidth, int imageHeight, Promise promise) {
         Bitmap bitmapImage = null;
         if (imageUrl.contains("http")) {
             bitmapImage = getBitmapFromURL(imageUrl);
@@ -253,18 +254,18 @@ public class NetPrinterAdapter implements PrinterAdapter {
                 bitmapImage = MediaStore.Images.Media.getBitmap(mContext.getContentResolver(), Uri.parse(imageUrl));
             }
             catch (IOException e){
-                errorCallback.invoke("image not found");
+                promise.reject("image not found");
                 return;
             }
         }
 
         if (bitmapImage == null) {
-            errorCallback.invoke("image not found");
+            promise.reject("image not found");
             return;
         }
 
         if (this.mSocket == null) {
-            errorCallback.invoke("Net connection is not built, may be you forgot to connectPrinter");
+            promise.reject("Net connection is not built, may be you forgot to connectPrinter");
             return;
         }
 
@@ -296,21 +297,23 @@ public class NetPrinterAdapter implements PrinterAdapter {
             printerOutputStream.write(LINE_FEED);
 
             printerOutputStream.flush();
+            promise.resolve("done");
         } catch (IOException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
+            promise.reject("failed to print data");
         }
     }
 
     @Override
-    public void printImageBase64(final Bitmap bitmapImage, int imageWidth, int imageHeight, Callback errorCallback) {
+    public void printImageBase64(final Bitmap bitmapImage, int imageWidth, int imageHeight, Promise promise) {
         if (bitmapImage == null) {
-            errorCallback.invoke("image not found");
+            promise.reject("image not found");
             return;
         }
 
         if (this.mSocket == null) {
-            errorCallback.invoke("Net connection is not built, may be you forgot to connectPrinter");
+            promise.reject("Net connection is not built, may be you forgot to connectPrinter");
             return;
         }
 
@@ -354,14 +357,15 @@ public class NetPrinterAdapter implements PrinterAdapter {
             // printerOutputStream.write(LINE_FEED);
 
             printerOutputStream.flush();
+            promise.resolve("done");
         } catch (IOException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
-            errorCallback.invoke("failed to print data");
+            promise.reject("failed to print data");
         } catch (EscPosConnectionException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
-            errorCallback.invoke("failed to print data");
+            promise.reject("failed to print data");
         }
     }
 }

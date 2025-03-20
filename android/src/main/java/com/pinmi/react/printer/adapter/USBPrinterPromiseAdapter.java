@@ -28,7 +28,7 @@ import android.graphics.BitmapFactory;
 
 
 import com.dantsu.escposprinter.exceptions.EscPosConnectionException;
-import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
@@ -44,9 +44,9 @@ import java.util.List;
  * Created by xiesubin on 2017/9/20.
  */
 
-public class USBPrinterAdapter implements PrinterAdapter {
+public class USBPrinterPromiseAdapter implements PrinterPromiseAdapter {
     @SuppressLint("StaticFieldLeak")
-    private static USBPrinterAdapter mInstance;
+    private static USBPrinterPromiseAdapter mInstance;
 
 
     private final String LOG_TAG = "RNUSBPrinter";
@@ -67,12 +67,12 @@ public class USBPrinterAdapter implements PrinterAdapter {
     private final static byte[] LINE_FEED = new byte[]{0x0A};
     private static final byte[] CENTER_ALIGN = {0x1B, 0X61, 0X31};
 
-    private USBPrinterAdapter() {
+    private USBPrinterPromiseAdapter() {
     }
 
-    public static USBPrinterAdapter getInstance() {
+    public static USBPrinterPromiseAdapter getInstance() {
         if (mInstance == null) {
-            mInstance = new USBPrinterAdapter();
+            mInstance = new USBPrinterPromiseAdapter();
         }
         return mInstance;
     }
@@ -110,7 +110,7 @@ public class USBPrinterAdapter implements PrinterAdapter {
     };
 
     @SuppressLint("UnspecifiedImmutableFlag")
-    public void init(ReactApplicationContext reactContext, Callback successCallback, Callback errorCallback) {
+    public void init(ReactApplicationContext reactContext, Promise promise) {
         this.mContext = reactContext;
         this.mUSBManager = (UsbManager) this.mContext.getSystemService(Context.USB_SERVICE);
         this.mPermissionIndent = PendingIntent.getBroadcast(mContext, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
@@ -120,7 +120,7 @@ public class USBPrinterAdapter implements PrinterAdapter {
         filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
         mContext.registerReceiver(mUsbDeviceReceiver, filter);
         Log.v(LOG_TAG, "RNUSBPrinter initialized");
-        successCallback.invoke();
+        promise.resolve("done");
     }
 
 
@@ -134,10 +134,10 @@ public class USBPrinterAdapter implements PrinterAdapter {
         }
     }
 
-    public List<PrinterDevice> getDeviceList(Callback errorCallback) {
+    public List<PrinterDevice> getDeviceList(Promise promise) {
         List<PrinterDevice> lists = new ArrayList<>();
         if (mUSBManager == null) {
-            errorCallback.invoke("USBManager is not initialized while get device list");
+            promise.reject("USBManager is not initialized while get device list");
             return lists;
         }
 
@@ -149,9 +149,9 @@ public class USBPrinterAdapter implements PrinterAdapter {
 
 
     @Override
-    public void selectDevice(PrinterDeviceId printerDeviceId, Callback successCallback, Callback errorCallback) {
+    public void selectDevice(PrinterDeviceId printerDeviceId, Promise promise) {
         if (mUSBManager == null) {
-            errorCallback.invoke("USBManager is not initialized before select device");
+            promise.reject("USBManager is not initialized before select device");
             return;
         }
 
@@ -162,12 +162,12 @@ public class USBPrinterAdapter implements PrinterAdapter {
                 closeConnectionIfExists();
                 mUSBManager.requestPermission(mUsbDevice, mPermissionIndent);
             }
-            successCallback.invoke(new USBPrinterDevice(mUsbDevice).toRNWritableMap());
+            promise.resolve(new USBPrinterDevice(mUsbDevice).toRNWritableMap());
             return;
         }
         closeConnectionIfExists();
         if (mUSBManager.getDeviceList().size() == 0) {
-            errorCallback.invoke("Device list is empty, can not choose device");
+            promise.reject("Device list is empty, can not choose device");
             return;
         }
         for (UsbDevice usbDevice : mUSBManager.getDeviceList().values()) {
@@ -175,12 +175,12 @@ public class USBPrinterAdapter implements PrinterAdapter {
                 Log.v(LOG_TAG, "request for device: vendor_id: " + usbPrinterDeviceId.getVendorId() + ", product_id: " + usbPrinterDeviceId.getProductId());
                 closeConnectionIfExists();
                 mUSBManager.requestPermission(usbDevice, mPermissionIndent);
-                successCallback.invoke(new USBPrinterDevice(usbDevice).toRNWritableMap());
+                promise.resolve(new USBPrinterDevice(usbDevice).toRNWritableMap());
                 return;
             }
         }
 
-        errorCallback.invoke("can not find specified device");
+        promise.reject("can not find specified device");
         return;
     }
 
@@ -228,7 +228,7 @@ public class USBPrinterAdapter implements PrinterAdapter {
     }
 
 
-    public void printRawData(String data, Callback errorCallback) {
+    public void printRawData(String data, Promise promise) {
         final String rawData = data;
         Log.v(LOG_TAG, "start to print raw data " + data);
         boolean isConnected = openConnection();
@@ -240,17 +240,18 @@ public class USBPrinterAdapter implements PrinterAdapter {
                     byte[] bytes = Base64.decode(rawData, Base64.DEFAULT);
                     int b = mUsbDeviceConnection.bulkTransfer(mEndPoint, bytes, bytes.length, 100000);
                     Log.i(LOG_TAG, "Return Status: b-->" + b);
+                    promise.resolve("done");
                 }
             }).start();
         } else {
             String msg = "failed to connected to device";
             Log.v(LOG_TAG, msg);
-            errorCallback.invoke(msg);
+            promise.reject(msg);
         }
     }
 
     @Override
-    public void printImageData(final String imageUrl, int imageWidth, int imageHeight, Callback errorCallback) {
+    public void printImageData(final String imageUrl, int imageWidth, int imageHeight, Promise promise) {
         Bitmap bitmapImage = null;
         if (imageUrl.contains("http")) {
             bitmapImage = getBitmapFromURL(imageUrl);
@@ -259,13 +260,13 @@ public class USBPrinterAdapter implements PrinterAdapter {
                 bitmapImage = MediaStore.Images.Media.getBitmap(mContext.getContentResolver(), Uri.parse(imageUrl));
             }
             catch (IOException e){
-                errorCallback.invoke("image not found");
+                promise.reject("image not found");
                 return;
             }
         }
 
         if (bitmapImage == null) {
-            errorCallback.invoke("image not found");
+            promise.reject("image not found");
             return;
         }
 
@@ -305,15 +306,15 @@ public class USBPrinterAdapter implements PrinterAdapter {
         } else {
             String msg = "failed to connected to device";
             Log.v(LOG_TAG, msg);
-            errorCallback.invoke(msg);
+            promise.reject(msg);
         }
 
     }
 
     @Override
-    public void printImageBase64(final Bitmap bitmapImage, int imageWidth, int imageHeight, Callback errorCallback) {
+    public void printImageBase64(final Bitmap bitmapImage, int imageWidth, int imageHeight, Promise promise) {
         if (bitmapImage == null) {
-            errorCallback.invoke("image not found");
+            promise.reject("image not found");
             return;
         }
 
@@ -360,15 +361,16 @@ public class USBPrinterAdapter implements PrinterAdapter {
 
                 mUsbDeviceConnection.bulkTransfer(mEndPoint, SET_LINE_SPACE_32, SET_LINE_SPACE_32.length, 100000);
                 mUsbDeviceConnection.bulkTransfer(mEndPoint, LINE_FEED, LINE_FEED.length, 100000);
+                promise.resolve("done");
             } catch (EscPosConnectionException e) {
                 Log.e(LOG_TAG, "failed to print data");
                 e.printStackTrace();
-                errorCallback.invoke("failed to print data");
+                promise.reject("failed to print data");
             }
         } else {
             String msg = "failed to connected to device";
             Log.v(LOG_TAG, msg);
-            errorCallback.invoke(msg);
+            promise.reject(msg);
         }
     }
 }

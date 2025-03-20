@@ -1,7 +1,21 @@
 package com.pinmi.react.printer.adapter;
 
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+
+import com.dantsu.escposprinter.EscPosPrinter;
+import com.dantsu.escposprinter.EscPosPrinterCommands;
+import com.dantsu.escposprinter.EscPosPrinterSize;
+import com.dantsu.escposprinter.connection.DeviceConnection;
+import com.dantsu.escposprinter.exceptions.EscPosConnectionException;
+import com.dantsu.escposprinter.textparser.PrinterTextParserImg;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public class UtilsImage {
     public static Bitmap getBitmapResized(Bitmap image, float decreaseSizeBy, int imageWidth, int imageHeight) {
@@ -94,5 +108,103 @@ public class UtilsImage {
             }
         }
         return result;
+    }
+
+    public static Bitmap getBitmapFromURL(String src) {
+        try {
+            URL url = new URL(src);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setDoInput(true);
+            connection.connect();
+            InputStream input = connection.getInputStream();
+            Bitmap myBitmap = BitmapFactory.decodeStream(input);
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+//            myBitmap.compress(Bitmap.CompressFormat.PNG, 100, baos);
+            //TODO use regex
+            if (src.contains(".jpg")) {
+                myBitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+            } else {
+                myBitmap.compress(Bitmap.CompressFormat.PNG, 100, baos);
+            }
+
+            return myBitmap;
+        } catch (IOException e) {
+            // Log exception
+            return null;
+        }
+    }
+
+    public static EscPosPrinterSize getEscPosPrinterSize() throws EscPosConnectionException {
+        DeviceConnection deviceConnection = new DeviceConnection() {
+            @Override
+            public DeviceConnection connect() throws EscPosConnectionException {
+                return null;
+            }
+
+            @Override
+            public DeviceConnection disconnect() {
+                return null;
+            }
+        };
+        EscPosPrinterSize printer = new EscPosPrinter(deviceConnection, 203, 48f, 32);
+        return printer;
+    }
+    public static byte[][] getEscPosImageBytes(Bitmap bitmapImage, int imageWidth, int imageHeight, boolean useEscAsteriskCommand) throws EscPosConnectionException {
+        EscPosPrinterSize printer = getEscPosPrinterSize();
+        // String hexaDecimalImage = PrinterTextParserImg.bitmapToHexadecimalString(printer, bitmapImage);
+        // String hexaDecimalImage = PrinterTextParserImg.bytesToHexadecimalString(EscPosPrinterCommands.bitmapToBytes(bitmapImage, gradient));
+        // byte[] byteImage = PrinterTextParserImg.hexadecimalStringToBytes(hexaDecimalImage);
+
+        boolean isSizeEdit = false;
+        int bitmapWidth = bitmapImage.getWidth(),
+                bitmapHeight = bitmapImage.getHeight(),
+                maxWidth = imageWidth > 0 ? imageWidth : printer.getPrinterWidthPx(),
+                maxHeight = imageHeight;
+
+        if (bitmapWidth > maxWidth) {
+            bitmapHeight = Math.round(((float) bitmapHeight) * ((float) maxWidth) / ((float) bitmapWidth));
+            bitmapWidth = maxWidth;
+            isSizeEdit = true;
+        }
+        if (maxHeight > 0 && bitmapHeight > maxHeight) {
+            bitmapWidth = Math.round(((float) bitmapWidth) * ((float) maxHeight) / ((float) bitmapHeight));
+            bitmapHeight = maxHeight;
+            isSizeEdit = true;
+        }
+
+        if (isSizeEdit) {
+            bitmapImage = Bitmap.createScaledBitmap(bitmapImage, bitmapWidth, bitmapHeight, true);
+        }        
+        boolean gradient = true;
+        byte[] byteImage = EscPosPrinterCommands.bitmapToBytes(bitmapImage, gradient);
+        int
+                byteWidth = ((int) byteImage[4] & 0xFF) + ((int) byteImage[5] & 0xFF) * 256,
+                width = byteWidth * 8,
+                height = ((int) byteImage[6] & 0xFF) + ((int) byteImage[7] & 0xFF) * 256,
+                nbrByteDiff = (int) Math.floor(((float) (printer.getPrinterWidthPx() - width)) / 8f),
+                nbrWhiteByteToInsert = 0;
+
+        final int textAlign = 0; // -1 means left, 0 means center, 1 means right
+        switch (textAlign) {
+            case 0: //PrinterTextParser.TAGS_ALIGN_CENTER:
+                nbrWhiteByteToInsert = Math.round(((float) nbrByteDiff) / 2f);
+                break;
+            case 1: //PrinterTextParser.TAGS_ALIGN_RIGHT:
+                nbrWhiteByteToInsert = nbrByteDiff;
+                break;
+        }
+
+        if (nbrWhiteByteToInsert > 0) {
+            int newByteWidth = byteWidth + nbrWhiteByteToInsert;
+            byte[] newImage = EscPosPrinterCommands.initGSv0Command(newByteWidth, height);
+            for (int i = 0; i < height; i++) {
+                System.arraycopy(byteImage, (byteWidth * i + 8), newImage, (newByteWidth * i + nbrWhiteByteToInsert + 8), byteWidth);
+            }
+            byteImage = newImage;
+        }
+        // this.length = (int) Math.ceil(((float) byteWidth * 8) / ((float) printer.getPrinterCharSizeWidthPx()));
+                
+        return useEscAsteriskCommand ? EscPosPrinterCommands.convertGSv0ToEscAsterisk(byteImage) : new byte[][]{byteImage};
     }
 }

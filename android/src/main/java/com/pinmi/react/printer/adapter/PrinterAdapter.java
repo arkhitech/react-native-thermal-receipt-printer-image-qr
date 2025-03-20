@@ -1,6 +1,7 @@
 package com.pinmi.react.printer.adapter;
 
 import android.app.Activity;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.telecom.Call;
@@ -16,7 +17,6 @@ import java.util.List;
 
 public interface PrinterAdapter {
 
-
     public void init(ReactApplicationContext reactContext, Callback successCallback, Callback errorCallback);
 
     public List<PrinterDevice> getDeviceList(Callback errorCallback);
@@ -29,5 +29,5 @@ public interface PrinterAdapter {
 
     public void printImageData(String imageUrl, int imageWidth, int imageHeight, Callback errorCallback);
 
-    public void printImageBase64(Bitmap imageUrl, int imageWidth, int imageHeight, Callback errorCallback);
+    public void printImageBase64(final Bitmap imageUrl, int imageWidth, int imageHeight, Callback errorCallback);
 }

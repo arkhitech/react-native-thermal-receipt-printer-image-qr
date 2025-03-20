@@ -22,8 +22,8 @@ import com.dantsu.escposprinter.EscPosPrinterSize;
 import com.dantsu.escposprinter.connection.DeviceConnection;
 import com.dantsu.escposprinter.exceptions.EscPosConnectionException;
 import com.dantsu.escposprinter.textparser.PrinterTextParserImg;
-import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.Promise;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -41,10 +41,10 @@ import android.graphics.BitmapFactory;
  * Created by xiesubin on 2017/9/21.
  */
 
-public class BLEPrinterAdapter implements PrinterAdapter{
+public class BLEPrinterPromiseAdapter implements PrinterPromiseAdapter{
 
 
-    private static BLEPrinterAdapter mInstance;
+    private static BLEPrinterPromiseAdapter mInstance;
 
 
     private final String LOG_TAG = "RNBLEPrinter";
@@ -64,28 +64,28 @@ public class BLEPrinterAdapter implements PrinterAdapter{
 
 
 
-    private BLEPrinterAdapter(){}
+    private BLEPrinterPromiseAdapter(){}
 
-    public static BLEPrinterAdapter getInstance() {
+    public static BLEPrinterPromiseAdapter getInstance() {
         if(mInstance == null) {
-            mInstance = new BLEPrinterAdapter();
+            mInstance = new BLEPrinterPromiseAdapter();
         }
         return mInstance;
     }
 
     @Override
-    public void init(ReactApplicationContext reactContext, Callback successCallback, Callback errorCallback) {
+    public void init(ReactApplicationContext reactContext, Promise promise) {
         this.mContext = reactContext;
         BluetoothAdapter bluetoothAdapter = getBTAdapter();
         if(bluetoothAdapter == null) {
-            errorCallback.invoke("No bluetooth adapter available");
+            promise.reject("No bluetooth adapter available");
             return;
         }
         if(!bluetoothAdapter.isEnabled()) {
-            errorCallback.invoke("bluetooth adapter is not enabled");
+            promise.reject("bluetooth adapter is not enabled");
             return;
         }else{
-            successCallback.invoke();
+            promise.resolve("done");
         }
 
     }
@@ -95,15 +95,15 @@ public class BLEPrinterAdapter implements PrinterAdapter{
     }
 
     @Override
-    public List<PrinterDevice> getDeviceList(Callback errorCallback) {
+    public List<PrinterDevice> getDeviceList(Promise promise) {
         BluetoothAdapter bluetoothAdapter = getBTAdapter();
         List<PrinterDevice> printerDevices = new ArrayList<>();
         if(bluetoothAdapter == null) {
-            errorCallback.invoke("No bluetooth adapter available");
+            promise.reject("No bluetooth adapter available");
             return printerDevices;
         }
         if (!bluetoothAdapter.isEnabled()) {
-            errorCallback.invoke("bluetooth is not enabled");
+            promise.reject("bluetooth is not enabled");
             return printerDevices;
         }
         Set<BluetoothDevice> pairedDevices = getBTAdapter().getBondedDevices();
@@ -114,21 +114,21 @@ public class BLEPrinterAdapter implements PrinterAdapter{
     }
 
     @Override
-    public void selectDevice(PrinterDeviceId printerDeviceId, Callback successCallback, Callback errorCallback) {
+    public void selectDevice(PrinterDeviceId printerDeviceId, Promise promise) {
         BluetoothAdapter bluetoothAdapter = getBTAdapter();
         if(bluetoothAdapter == null) {
-            errorCallback.invoke("No bluetooth adapter available");
+            promise.reject("No bluetooth adapter available");
             return;
         }
         if (!bluetoothAdapter.isEnabled()) {
-            errorCallback.invoke("bluetooth is not enabled");
+            promise.reject("bluetooth is not enabled");
             return;
         }
         BLEPrinterDeviceId blePrinterDeviceId = (BLEPrinterDeviceId)printerDeviceId;
         if(this.mBluetoothDevice != null){
             if(this.mBluetoothDevice.getAddress().equals(blePrinterDeviceId.getInnerMacAddress()) && this.mBluetoothSocket != null){
                 Log.v(LOG_TAG, "do not need to reconnect");
-                successCallback.invoke(new BLEPrinterDevice(this.mBluetoothDevice).toRNWritableMap());
+                promise.resolve(new BLEPrinterDevice(this.mBluetoothDevice).toRNWritableMap());
                 return;
             }else{
                 closeConnectionIfExists();
@@ -141,18 +141,18 @@ public class BLEPrinterAdapter implements PrinterAdapter{
 
                 try{
                     connectBluetoothDevice(device);
-                    successCallback.invoke(new BLEPrinterDevice(this.mBluetoothDevice).toRNWritableMap());
+                    promise.resolve(new BLEPrinterDevice(this.mBluetoothDevice).toRNWritableMap());
                     return;
                 }catch (IOException e){
                     e.printStackTrace();
-                    errorCallback.invoke(e.getMessage());
+                    promise.reject(e.getMessage());
                     return;
                 }
             }
         }
         String errorText = "Can not find the specified printing device, please perform Bluetooth pairing in the system settings first.";
         Toast.makeText(this.mContext, errorText, Toast.LENGTH_LONG).show();
-        errorCallback.invoke(errorText);
+        promise.reject(errorText);
         return;
     }
 
@@ -181,9 +181,9 @@ public class BLEPrinterAdapter implements PrinterAdapter{
     }
 
     @Override
-    public void printRawData(String rawBase64Data, Callback errorCallback) {
+    public void printRawData(String rawBase64Data, Promise promise) {
         if(this.mBluetoothSocket == null){
-            errorCallback.invoke("bluetooth connection is not built, may be you forgot to connectPrinter");
+            promise.reject("bluetooth connection is not built, may be you forgot to connectPrinter");
             return;
         }
         final String rawData = rawBase64Data;
@@ -197,9 +197,11 @@ public class BLEPrinterAdapter implements PrinterAdapter{
                     OutputStream printerOutputStream = socket.getOutputStream();
                     printerOutputStream.write(bytes, 0, bytes.length);
                     printerOutputStream.flush();
+                    promise.resolve("done");
                 }catch (IOException e){
                     Log.e(LOG_TAG, "failed to print data" + rawData);
                     e.printStackTrace();
+                    promise.reject("failed to print data");
                 }
 
             }
@@ -207,7 +209,7 @@ public class BLEPrinterAdapter implements PrinterAdapter{
     }
 
     @Override
-    public void printImageData(String imageUrl, int  imageWidth, int imageHeight, Callback errorCallback) {
+    public void printImageData(String imageUrl, int  imageWidth, int imageHeight, Promise promise) {
         Bitmap bitmapImage = null;
         if (imageUrl.contains("http")) {
             bitmapImage = getBitmapFromURL(imageUrl);
@@ -216,19 +218,19 @@ public class BLEPrinterAdapter implements PrinterAdapter{
                 bitmapImage = MediaStore.Images.Media.getBitmap(mContext.getContentResolver(), Uri.parse(imageUrl));
             }
             catch (IOException e){
-                errorCallback.invoke("image not found");
+                promise.reject("image not found");
                 return;
             }
         }
 //        final Bitmap bitmapImage = getBitmapFromURL(imageUrl);
 
         if(bitmapImage == null) {
-            errorCallback.invoke("image not found");
+            promise.reject("image not found");
             return;
         }
 
         if (this.mBluetoothSocket == null) {
-            errorCallback.invoke("bluetooth connection is not built, may be you forgot to connectPrinter");
+            promise.reject("bluetooth connection is not built, may be you forgot to connectPrinter");
             return;
         }
 
@@ -247,6 +249,7 @@ public class BLEPrinterAdapter implements PrinterAdapter{
                 // the printer will resume to normal text printing
                 printerOutputStream.write(SELECT_BIT_IMAGE_MODE);
                 // Set nL and nH based on the width of the image
+                printerOutputStream.write(CENTER_ALIGN);
                 printerOutputStream.write(new byte[]{(byte)(0x00ff & pixels[y].length)
                         , (byte)((0xff00 & pixels[y].length) >> 8)});
                 for (int x = 0; x < pixels[y].length; x++) {
@@ -261,21 +264,23 @@ public class BLEPrinterAdapter implements PrinterAdapter{
             printerOutputStream.write(LINE_FEED);
 
             printerOutputStream.flush();
+            promise.resolve("done");
         } catch (IOException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
+            promise.reject("failed to print data");
         }
     }
 
     @Override
-    public void printImageBase64(final Bitmap bitmapImage, int imageWidth, int imageHeight, Callback errorCallback) {
+    public void printImageBase64(final Bitmap bitmapImage, int imageWidth, int imageHeight, Promise promise) {
         if(bitmapImage == null) {
-            errorCallback.invoke("image not found");
+            promise.reject("image not found");
             return;
         }
 
         if (this.mBluetoothSocket == null) {
-            errorCallback.invoke("bluetooth connection is not built, may be you forgot to connectPrinter");
+            promise.reject("bluetooth connection is not built, may be you forgot to connectPrinter");
             return;
         }
 
@@ -318,14 +323,15 @@ public class BLEPrinterAdapter implements PrinterAdapter{
             printerOutputStream.write(SET_LINE_SPACE_32);
 
             printerOutputStream.flush();
+            promise.resolve("done");
         } catch (IOException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
-            errorCallback.invoke("failed to print data");
+            promise.reject("failed to print data");
         } catch (EscPosConnectionException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
-            errorCallback.invoke("failed to print data");
+            promise.reject("failed to print data");
         }
     }
 }

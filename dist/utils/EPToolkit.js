@@ -61,7 +61,19 @@ export function exchange_text(text, options) {
     var m_options = options || default_options;
     var bytes = new BufferHelper();
     bytes.concat(init_printer_bytes);
+    // this.charsetCommand = new byte[]{0x1B, 0x74, (byte) escPosCharsetId};
+    if (m_options["charsetId"]) {
+      console.log("Setting charsetId", m_options["charsetId"])
+      const charsetCommand = Buffer.from([0x1B, 0x74, m_options["charsetId"]])
+      bytes.concat(charsetCommand);
+    } else {
+      console.log("No charset provided", m_options["charsetId"])
+      const charsetCommand = Buffer.from([0x1B, 0x74, 37])
+      bytes.concat(charsetCommand);
+    }
+
     bytes.concat(default_space_bytes);
+    
     var temp = "";
     for (var i = 0; i < text.length; i++) {
         var ch = text[i];
@@ -88,6 +100,7 @@ export function exchange_text(text, options) {
                 break;
         }
     }
+    console.log(temp, "Encoding with ", m_options.encoding)
     temp.length && bytes.concat(iconv.encode(temp, m_options.encoding));
     // check for "encoding" flag
     if (typeof m_options["encoding"] === "boolean" && options_controller["encoding"]) {

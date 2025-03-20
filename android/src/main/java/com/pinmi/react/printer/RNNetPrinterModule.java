@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory;
 import android.util.Base64;
 import android.util.Log;
 
+import com.dantsu.escposprinter.exceptions.EscPosConnectionException;
 import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -37,8 +38,9 @@ public class RNNetPrinterModule extends ReactContextBaseJavaModule implements RN
     @ReactMethod
     @Override
     public void closeConn() {
-        this.adapter = NetPrinterAdapter.getInstance();
-        this.adapter.closeConnectionIfExists();
+        if(this.adapter != null) {
+          this.adapter.closeConnectionIfExists();
+        }
     }
 
     @ReactMethod
@@ -73,7 +75,7 @@ public class RNNetPrinterModule extends ReactContextBaseJavaModule implements RN
 
     @ReactMethod
     @Override
-    public void printImageBase64(String base64, int imageWidth, int imageHeight, Callback errorCallback) {
+    public void printImageBase64(String base64, int imageWidth, int imageHeight, Callback errorCallback) throws EscPosConnectionException {
         // String imageBase64 = "data:image/png;base64," + imageUrl;
         // String base64ImageProcessed = imageUrl.split(",")[1];
         byte[] decodedString = Base64.decode(base64, Base64.DEFAULT);

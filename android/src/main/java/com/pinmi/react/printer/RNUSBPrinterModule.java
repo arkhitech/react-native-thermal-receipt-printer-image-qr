@@ -42,7 +42,9 @@ public class RNUSBPrinterModule extends ReactContextBaseJavaModule implements RN
     @ReactMethod
     @Override
     public void closeConn()  {
-        adapter.closeConnectionIfExists();
+        if(this.adapter != null) {
+          this.adapter.closeConnectionIfExists();
+        }
     }
 
     @ReactMethod
@@ -69,7 +71,7 @@ public class RNUSBPrinterModule extends ReactContextBaseJavaModule implements RN
     @ReactMethod
     @Override
     public void printImageData(String imageUrl, int imageWidth, int imageHeight, Callback errorCallback) {
-        adapter.printImageData(imageUrl, imageWidth, imageHeight,errorCallback);
+        adapter.printImageData(imageUrl, imageWidth, imageHeight, errorCallback);
     }
 
     @ReactMethod
@@ -79,7 +81,7 @@ public class RNUSBPrinterModule extends ReactContextBaseJavaModule implements RN
         // String base64ImageProcessed = imageUrl.split(",")[1];
         byte[] decodedString = Base64.decode(base64, Base64.DEFAULT);
         Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-        adapter.printImageBase64(decodedByte, imageWidth, imageHeight,errorCallback);
+        adapter.printImageBase64(decodedByte, imageWidth, imageHeight, errorCallback);
     }
 
     @ReactMethod

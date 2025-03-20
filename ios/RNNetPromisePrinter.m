@@ -113,7 +113,7 @@ RCT_EXPORT_METHOD(connectPrinter:(NSString *)host
     }
 }
 
-RCT_EXPORT_METHOD(printRawData:(NSString *)text
+RCT_EXPORT_METHOD(printRawData:(NSString *)base64String
                   printerOptions:(NSDictionary *)options
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
@@ -125,6 +125,9 @@ RCT_EXPORT_METHOD(printRawData:(NSString *)text
         BOOL cut = (BOOL)[cutPtr intValue];
 
         !connected_ip ? [NSException raise:@"Invalid connection" format:@"Can't connect to printer"] : nil;
+        NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
+        NSString *text = [[NSString alloc] initWithData:decodedData encoding:NSUTF8StringEncoding];
+        NSLog(@"%@", text);
 
         // [[PrinterSDK defaultPrinterSDK] printTestPaper];
         [[PrinterSDK defaultPrinterSDK] printText:text];

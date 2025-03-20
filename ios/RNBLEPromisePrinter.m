@@ -77,7 +77,7 @@ RCT_EXPORT_METHOD(connectPrinter:(NSString *)inner_mac_address
     }
 }
 
-RCT_EXPORT_METHOD(printRawData:(NSString *)text
+RCT_EXPORT_METHOD(printRawData:(NSString *)base64String
                   printerOptions:(NSDictionary *)options
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
@@ -89,6 +89,9 @@ RCT_EXPORT_METHOD(printRawData:(NSString *)text
 
         BOOL bold = (BOOL)[boldPtr intValue];
         BOOL alignCenter = (BOOL)[alignCenterPtr intValue];
+
+        NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
+        NSString *text = [[NSString alloc] initWithData:decodedData encoding:NSUTF8StringEncoding];
 
         bold ? [[PrinterSDK defaultPrinterSDK] sendHex:@"1B2108"] : [[PrinterSDK defaultPrinterSDK] sendHex:@"1B2100"];
         alignCenter ? [[PrinterSDK defaultPrinterSDK] sendHex:@"1B6102"] : [[PrinterSDK defaultPrinterSDK] sendHex:@"1B6101"];

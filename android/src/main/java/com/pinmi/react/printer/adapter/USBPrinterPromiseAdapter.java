@@ -365,7 +365,7 @@ public class USBPrinterPromiseAdapter implements PrinterPromiseAdapter {
             } catch (EscPosConnectionException e) {
                 Log.e(LOG_TAG, "failed to print data");
                 e.printStackTrace();
-                promise.reject("failed to print data");
+                promise.reject("failed to print data" + e.getMessage());
             }
         } else {
             String msg = "failed to connected to device";

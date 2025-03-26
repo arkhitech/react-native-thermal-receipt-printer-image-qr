@@ -201,7 +201,7 @@ public class BLEPrinterPromiseAdapter implements PrinterPromiseAdapter{
                 }catch (IOException e){
                     Log.e(LOG_TAG, "failed to print data" + rawData);
                     e.printStackTrace();
-                    promise.reject("failed to print data");
+                    promise.resolve("failed to print data" + e.getMessage());
                 }
 
             }
@@ -268,7 +268,7 @@ public class BLEPrinterPromiseAdapter implements PrinterPromiseAdapter{
         } catch (IOException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
-            promise.reject("failed to print data");
+            promise.reject("failed to print data" + e.getMessage());
         }
     }
 
@@ -327,11 +327,11 @@ public class BLEPrinterPromiseAdapter implements PrinterPromiseAdapter{
         } catch (IOException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
-            promise.reject("failed to print data");
+            promise.reject("failed to print data" + e.getMessage());
         } catch (EscPosConnectionException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
-            promise.reject("failed to print data");
+            promise.reject("failed to print data" + e.getMessage());
         }
     }
 }

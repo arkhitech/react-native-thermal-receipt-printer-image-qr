@@ -86,13 +86,15 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
         // promise.reject("do not need to invoke get device list for net
         // printer");
         // Use emitter instancee get devicelist to non block main thread
-        this.scan();
+        this.scan(promise);
         return new ArrayList<>();
     }
 
-    private void scan() {
-        if (isRunning)
+    private void scan(Promise promise) {
+        if (isRunning) {
+            promise.reject("Already scaning");
             return;
+        }
         new Thread(new Runnable() {
             @RequiresApi(api = Build.VERSION_CODES.KITKAT)
             @Override
@@ -125,12 +127,13 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
                     }
 
                     emitEvent(EVENT_SCANNER_RESOLVED, array);
-
+                    promise.resolve(array);
                 } catch (NullPointerException ex) {
                     Log.i(LOG_TAG, "No connection");
                 } finally {
                     isRunning = false;
                     emitEvent(EVENT_SCANNER_RUNNING, isRunning);
+
                 }
             }
         }).start();
@@ -238,6 +241,7 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
                 } catch (IOException e) {
                     Log.e(LOG_TAG, "failed to print data" + rawData);
                     e.printStackTrace();
+                    promise.reject("failed to print data" + e.getMessage());
                 }
             }
         }).start();
@@ -301,7 +305,7 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
         } catch (IOException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
-            promise.reject("failed to print data");
+            promise.reject("failed to print data" + e.getMessage());
         }
     }
 
@@ -361,11 +365,11 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
         } catch (IOException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
-            promise.reject("failed to print data");
+            promise.reject("failed to print data" + e.getMessage());
         } catch (EscPosConnectionException e) {
             Log.e(LOG_TAG, "failed to print data");
             e.printStackTrace();
-            promise.reject("failed to print data");
+            promise.reject("failed to print data" + e.getMessage());
         }
     }
 }

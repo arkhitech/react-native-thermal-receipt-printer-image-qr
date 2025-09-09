@@ -87,4 +87,15 @@ public class RNNetPrinterPromiseModule extends ReactContextBaseJavaModule implem
     public String getName() {
         return "RNNetPromisePrinter";
     }
+
+    @ReactMethod
+    @Override
+    public void getAllNetworkDevices(int port, Promise promise) {
+        try {
+            this.adapter.getAllNetworkDevices(port , promise);
+        } catch (Exception ex) {
+            promise.reject(ex.getMessage());
+        }
+        // this.adapter.getDeviceList(errorCallback);
+    }
 }

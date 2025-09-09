@@ -372,4 +372,65 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
             promise.reject("failed to print data" + e.getMessage());
         }
     }
+
+
+    private boolean isPortOpen(String host, int port, int timeout) {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(host, port), timeout);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    @Override 
+    public void getAllNetworkDevices(int port, Promise promise) {
+        if (isRunning) {
+            promise.reject("Already scanning");
+            return;
+        }
+        new Thread(new Runnable() {
+            @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+            @Override
+            public void run() {
+                try {
+                    isRunning = true;
+                    emitEvent(EVENT_SCANNER_RUNNING, isRunning);
+
+                    WifiManager wifiManager = (WifiManager) mContext.getApplicationContext()
+                            .getSystemService(Context.WIFI_SERVICE);
+                    String ipAddress = ipToString(wifiManager.getConnectionInfo().getIpAddress());
+                    WritableArray array = Arguments.createArray();
+
+                    String prefix = ipAddress.substring(0, ipAddress.lastIndexOf('.') + 1);
+                    int suffix = Integer.parseInt(ipAddress.substring(ipAddress.lastIndexOf('.') + 1));
+
+                    for (int i = 0; i <= 255; i++) {
+                        if (i == suffix) continue;
+
+                        String host = prefix + i;
+
+                        if (isPortOpen(host, port, 200)) {
+                            WritableMap payload = Arguments.createMap();
+                            payload.putString("host", host);
+                            payload.putInt("port", port);
+                            array.pushMap(payload);
+                        }
+                    }
+
+                    emitEvent(EVENT_SCANNER_RESOLVED, array);
+                    promise.resolve(array);
+                } catch (NullPointerException ex) {
+                    Log.i(LOG_TAG, "No connection");
+                    promise.reject("No connection", ex);
+                } finally {
+                    isRunning = false;
+                    emitEvent(EVENT_SCANNER_RUNNING, isRunning);
+                }
+            }
+        }).start();
+    }
 }
+
+
+

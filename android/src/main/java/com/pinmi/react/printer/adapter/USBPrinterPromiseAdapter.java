@@ -303,6 +303,7 @@ public class USBPrinterPromiseAdapter implements PrinterPromiseAdapter {
 
             mUsbDeviceConnection.bulkTransfer(mEndPoint, SET_LINE_SPACE_32, SET_LINE_SPACE_32.length, 100000);
             mUsbDeviceConnection.bulkTransfer(mEndPoint, LINE_FEED, LINE_FEED.length, 100000);
+            promise.resolve("done");
         } else {
             String msg = "failed to connected to device";
             Log.v(LOG_TAG, msg);

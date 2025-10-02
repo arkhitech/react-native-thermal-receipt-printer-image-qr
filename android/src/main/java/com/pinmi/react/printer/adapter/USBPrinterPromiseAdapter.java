@@ -329,6 +329,9 @@ public class USBPrinterPromiseAdapter implements PrinterPromiseAdapter {
 
                 if(useGsv0 || useEscAsteriskCommand) {
                     byte[][] pixels = getEscPosImageBytes(bitmapImage, imageWidth, imageHeight, useEscAsteriskCommand);
+                    int b = mUsbDeviceConnection.bulkTransfer(mEndPoint, SET_LINE_SPACE_24, SET_LINE_SPACE_24.length, 100000);
+
+                    b = mUsbDeviceConnection.bulkTransfer(mEndPoint, CENTER_ALIGN, CENTER_ALIGN.length, 100000);
                     for (byte[] bytes : pixels) {
                         mUsbDeviceConnection.bulkTransfer(mEndPoint, bytes, bytes.length, 100000);
                     }

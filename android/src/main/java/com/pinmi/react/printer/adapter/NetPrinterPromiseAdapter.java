@@ -331,6 +331,8 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
 
             if(useGsv0 || useEscAsteriskCommand) {
                 byte[][] pixels = getEscPosImageBytes(bitmapImage, imageWidth, imageHeight, useEscAsteriskCommand);
+                printerOutputStream.write(SET_LINE_SPACE_24);
+                printerOutputStream.write(CENTER_ALIGN);
                 for (byte[] bytes : pixels) {
                     printerOutputStream.write(bytes);
                     printerOutputStream.flush();

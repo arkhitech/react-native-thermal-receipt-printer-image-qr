@@ -90,6 +90,12 @@ public class RNUSBPrinterPromiseModule extends ReactContextBaseJavaModule implem
         adapter.selectDevice(USBPrinterDeviceId.valueOf(vendorId, productId), promise);
     }
 
+    @ReactMethod
+    @Override
+    public void getAllNetworkDevices(int port, Promise promise) {
+        promise.reject("NOT_SUPPORTED", "Network device discovery is not supported for USB printers");
+    }
+
     @Override
     public String getName() {
         return "RNUSBPromisePrinter";

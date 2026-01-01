@@ -26,5 +26,8 @@ public interface RNPrinterPromiseModule {
 
     @ReactMethod
     public void printImageBase64(String base64, int imageWidth, int imageHeight, Promise promise) throws EscPosConnectionException;
+
+    @ReactMethod
+    public void getAllNetworkDevices(int port, Promise promise);
 }
 

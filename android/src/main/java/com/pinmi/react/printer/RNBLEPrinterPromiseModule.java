@@ -93,6 +93,12 @@ public class RNBLEPrinterPromiseModule extends ReactContextBaseJavaModule implem
         adapter.selectDevice(BLEPrinterDeviceId.valueOf(innerAddress), promise);
     }
 
+    @ReactMethod
+    @Override
+    public void getAllNetworkDevices(int port, Promise promise) {
+        promise.reject("NOT_SUPPORTED", "Network device discovery is not supported for BLE printers");
+    }
+
     @Override
     public String getName() {
         return "RNBLEPromisePrinter";

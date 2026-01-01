@@ -336,4 +336,9 @@ public class BLEPrinterPromiseAdapter implements PrinterPromiseAdapter{
             promise.reject("failed to print data" + e.getMessage());
         }
     }
+
+    public void getAllNetworkDevices(int timeout, Promise promise) {
+        // BLE printers don’t support network device scanning
+        promise.resolve(null);
+    }
 }

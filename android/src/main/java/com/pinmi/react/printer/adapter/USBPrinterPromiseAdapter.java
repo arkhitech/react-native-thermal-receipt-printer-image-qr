@@ -377,4 +377,9 @@ public class USBPrinterPromiseAdapter implements PrinterPromiseAdapter {
             promise.reject(msg);
         }
     }
+
+    public void getAllNetworkDevices(int timeout, Promise promise) {
+        // BLE printers don’t support network device scanning
+        promise.resolve(null);
+    }
 }

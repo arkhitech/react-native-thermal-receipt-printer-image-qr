@@ -95,18 +95,22 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
             promise.reject("Already scaning");
             return;
         }
+        Log.i(LOG_TAG, "Running scan");
+
+        isRunning = true;
         new Thread(new Runnable() {
             @RequiresApi(api = Build.VERSION_CODES.KITKAT)
             @Override
             public void run() {
                 try {
-                    isRunning = true;
+                    Log.i(LOG_TAG, "Inside Running scan");
                     emitEvent(EVENT_SCANNER_RUNNING, isRunning);
 
                     WifiManager wifiManager = (WifiManager) mContext.getApplicationContext()
                             .getSystemService(Context.WIFI_SERVICE);
                     String ipAddress = ipToString(wifiManager.getConnectionInfo().getIpAddress());
-                    WritableArray array = Arguments.createArray();
+                    WritableArray arrayEvent = Arguments.createArray();
+                    WritableArray arrayPromise = Arguments.createArray();
 
                     String prefix = ipAddress.substring(0, ipAddress.lastIndexOf('.') + 1);
                     int suffix = Integer
@@ -115,6 +119,7 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
                     for (int i = 0; i <= 255; i++) {
                         if (i == suffix)
                             continue;
+                        Log.i(LOG_TAG, "Scanning address: " + prefix + i);
                         ArrayList<Integer> ports = getAvailablePorts(prefix + i);
                         if (!ports.isEmpty()) {
                             WritableMap payload = Arguments.createMap();
@@ -122,16 +127,20 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
                             payload.putString("host", prefix + i);
                             payload.putInt("port", 9100);
 
-                            array.pushMap(payload);
+                            arrayEvent.pushMap(payload);
+                            arrayPromise.pushMap(payload);
                         }
                     }
 
-                    emitEvent(EVENT_SCANNER_RESOLVED, array);
-                    promise.resolve(array);
+                    Log.i(LOG_TAG, "Emitting scan resolved");
+                    emitEvent(EVENT_SCANNER_RESOLVED, arrayEvent);
+                    Log.i(LOG_TAG, "Resolving scan array");
+                    promise.resolve(arrayPromise);
                 } catch (NullPointerException ex) {
                     Log.i(LOG_TAG, "No connection");
                 } finally {
                     isRunning = false;
+                    Log.i(LOG_TAG, "Emitting scan isRunning false");
                     emitEvent(EVENT_SCANNER_RUNNING, isRunning);
 
                 }
@@ -374,4 +383,75 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
             promise.reject("failed to print data" + e.getMessage());
         }
     }
+
+
+    private boolean isPortOpen(String host, int port, int timeout) {
+        return crunchifyAddressReachable(host, port);
+
+        // try (Socket socket = new Socket()) {
+        //     socket.connect(new InetSocketAddress(host, port), timeout);
+        //     return true;
+        // } catch (IOException e) {
+        //     return false;
+        // }
+    }
+
+    @Override 
+    public void getAllNetworkDevices(int port, Promise promise) {
+        if (isRunning) {
+            promise.reject("Already scanning");
+            return;
+        }
+        isRunning = true;
+        Log.i(LOG_TAG, "Running All Network Devices scan");
+        new Thread(new Runnable() {
+            @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+            @Override
+            public void run() {
+                try {
+                    Log.i(LOG_TAG, "Inside Running All Network Devices scan");
+                    emitEvent(EVENT_SCANNER_RUNNING, isRunning);
+
+                    WifiManager wifiManager = (WifiManager) mContext.getApplicationContext()
+                            .getSystemService(Context.WIFI_SERVICE);
+                    String ipAddress = ipToString(wifiManager.getConnectionInfo().getIpAddress());
+                    WritableArray arrayEvent = Arguments.createArray();
+                    WritableArray arrayPromise = Arguments.createArray();
+
+                    String prefix = ipAddress.substring(0, ipAddress.lastIndexOf('.') + 1);
+                    int suffix = Integer.parseInt(ipAddress.substring(ipAddress.lastIndexOf('.') + 1));
+
+                    for (int i = 0; i <= 255; i++) {
+                        if (i == suffix) continue;
+
+                        String host = prefix + i;
+                        Log.i(LOG_TAG, "Checking host: " + host + " on port: " + port);
+
+                        if (isPortOpen(host, port, 200)) {
+                            WritableMap payload = Arguments.createMap();
+                            payload.putString("host", host);
+                            payload.putInt("port", port);
+                            arrayEvent.pushMap(payload);
+                            arrayPromise.pushMap(payload);
+                        }
+                    }
+
+                    Log.i(LOG_TAG, "Emitting All Network Devices scan");
+                    emitEvent(EVENT_SCANNER_RESOLVED, arrayEvent);
+                    Log.i(LOG_TAG, "Resolving All Network Devices scan");
+                    promise.resolve(arrayPromise);
+                } catch (NullPointerException ex) {
+                    Log.i(LOG_TAG, "No connection");
+                    promise.reject("No connection", ex);
+                } finally {
+                    isRunning = false;
+                    Log.i(LOG_TAG, "Emitting All Network Devices scan isRunning false");
+                    emitEvent(EVENT_SCANNER_RUNNING, isRunning);
+                }
+            }
+        }).start();
+    }
 }
+
+
+

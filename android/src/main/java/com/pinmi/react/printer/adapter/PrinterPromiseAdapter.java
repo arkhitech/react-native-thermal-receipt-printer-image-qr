@@ -30,4 +30,6 @@ public interface PrinterPromiseAdapter {
     public void printImageData(String imageUrl, int imageWidth, int imageHeight, Promise promise);
 
     public void printImageBase64(final Bitmap bitmapImage, int imageWidth, int imageHeight, Promise promise);
+
+    public void getAllNetworkDevices(int timeout, Promise promise);
 }

@@ -428,11 +428,15 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
                         Log.i(LOG_TAG, "Checking host: " + host + " on port: " + port);
 
                         if (isPortOpen(host, port, 200)) {
-                            WritableMap payload = Arguments.createMap();
-                            payload.putString("host", host);
-                            payload.putInt("port", port);
-                            arrayEvent.pushMap(payload);
-                            arrayPromise.pushMap(payload);
+                            WritableMap payloadEvent = Arguments.createMap();
+                            payloadEvent.putString("host", host);
+                            payloadEvent.putInt("port", port);
+                            arrayEvent.pushMap(payloadEvent);
+
+                            WritableMap payloadPromise = Arguments.createMap();
+                            payloadPromise.putString("host", host);
+                            payloadPromise.putInt("port", port);
+                            arrayPromise.pushMap(payloadPromise);
                         }
                     }
 

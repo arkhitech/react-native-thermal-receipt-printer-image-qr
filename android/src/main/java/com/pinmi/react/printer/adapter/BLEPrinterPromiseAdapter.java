@@ -249,7 +249,6 @@ public class BLEPrinterPromiseAdapter implements PrinterPromiseAdapter{
                 // the printer will resume to normal text printing
                 printerOutputStream.write(SELECT_BIT_IMAGE_MODE);
                 // Set nL and nH based on the width of the image
-                printerOutputStream.write(CENTER_ALIGN);
                 printerOutputStream.write(new byte[]{(byte)(0x00ff & pixels[y].length)
                         , (byte)((0xff00 & pixels[y].length) >> 8)});
                 for (int x = 0; x < pixels[y].length; x++) {

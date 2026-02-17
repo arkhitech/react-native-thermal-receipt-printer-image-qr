@@ -12,10 +12,16 @@
 #import "PrinterSDK.h"
 #include <ifaddrs.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <string.h>
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
 NSString *const EVENT_PROMISE_SCANNER_RESOLVED = @"scannerResolved";
+NSString *const EVENT_PROMISE_SCANNER_PARTIAL = @"scannerFoundDevice";
 NSString *const EVENT_PROMISE_SCANNER_RUNNING = @"scannerRunning";
 
 @implementation RNNetPromisePrinter
@@ -28,7 +34,7 @@ RCT_EXPORT_MODULE()
 
 - (NSArray<NSString *> *)supportedEvents
 {
-    return @[EVENT_PROMISE_SCANNER_RESOLVED, EVENT_PROMISE_SCANNER_RUNNING];
+    return @[EVENT_PROMISE_SCANNER_RESOLVED, EVENT_PROMISE_SCANNER_PARTIAL, EVENT_PROMISE_SCANNER_RUNNING];
 }
 
 RCT_EXPORT_METHOD(init:(RCTPromiseResolveBlock)resolve
@@ -45,6 +51,19 @@ RCT_EXPORT_METHOD(getDeviceList:(RCTPromiseResolveBlock)resolve
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleBLEPrinterConnectedNotification:) name:@"BLEPrinterConnected" object:nil];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         [self scan:resolve rejecter: reject];
+    });
+}
+
+RCT_EXPORT_METHOD(getAllNetworkDevices:(nonnull NSNumber *)port
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    if (is_scanning) {
+        reject(@"already_scanning", @"Already scanning", nil);
+        return;
+    }
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self scanAllNetworkDevices:[port intValue] resolver:resolve rejecter:reject];
     });
 }
 
@@ -82,6 +101,116 @@ RCT_EXPORT_METHOD(getDeviceList:(RCTPromiseResolveBlock)resolve
     [[PrinterSDK defaultPrinterSDK] disconnect];
     is_scanning = NO;
     [self sendEventWithName:EVENT_PROMISE_SCANNER_RUNNING body:@NO];
+}
+
+- (void)scanAllNetworkDevices:(int)port
+                     resolver:(RCTPromiseResolveBlock)resolve
+                     rejecter:(RCTPromiseRejectBlock)reject {
+    @try {
+        PrivateIP *privateIP = [[PrivateIP alloc] init];
+        NSString *localIP = [privateIP getIPAddress];
+        if (localIP == nil || [localIP length] == 0) {
+            reject(@"no_connection", @"No connection", nil);
+            return;
+        }
+
+        NSRange lastDot = [localIP rangeOfString:@"." options:NSBackwardsSearch];
+        if (lastDot.location == NSNotFound) {
+            reject(@"invalid_ip", @"Invalid local IP address", nil);
+            return;
+        }
+
+        is_scanning = YES;
+        [self sendEventWithName:EVENT_PROMISE_SCANNER_RUNNING body:@YES];
+
+        NSString *prefix = [localIP substringToIndex:lastDot.location + 1];
+        NSInteger suffix = [[localIP substringFromIndex:lastDot.location + 1] integerValue];
+
+        NSMutableArray *arrayEvent = [NSMutableArray new];
+        NSMutableArray *arrayPromise = [NSMutableArray new];
+
+        for (NSInteger i = 0; i <= 255; i++) {
+            if (i == suffix) {
+                continue;
+            }
+
+            NSString *host = [NSString stringWithFormat:@"%@%ld", prefix, (long)i];
+            BOOL isOpen = [self isPortOpen:host port:port timeoutMs:100];
+            if (!isOpen) {
+                continue;
+            }
+
+            NSDictionary *payload = @{@"host": host, @"port": @(port)};
+            [arrayEvent addObject:payload];
+            [arrayPromise addObject:payload];
+            [self sendEventWithName:EVENT_PROMISE_SCANNER_PARTIAL body:@[payload]];
+        }
+
+        [self sendEventWithName:EVENT_PROMISE_SCANNER_RESOLVED body:arrayEvent];
+        resolve(arrayPromise);
+    } @catch (NSException *exception) {
+        reject(exception.name, exception.reason, nil);
+    } @finally {
+        is_scanning = NO;
+        [self sendEventWithName:EVENT_PROMISE_SCANNER_RUNNING body:@NO];
+    }
+}
+
+- (BOOL)isPortOpen:(NSString *)host port:(int)port timeoutMs:(int)timeoutMs {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        return NO;
+    }
+
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    if (flags < 0 || fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        close(sockfd);
+        return NO;
+    }
+
+    struct sockaddr_in serverAddr;
+    memset(&serverAddr, 0, sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(port);
+    if (inet_pton(AF_INET, [host UTF8String], &serverAddr.sin_addr) <= 0) {
+        close(sockfd);
+        return NO;
+    }
+
+    int connectResult = connect(sockfd, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
+    if (connectResult == 0) {
+        close(sockfd);
+        return YES;
+    }
+
+    if (errno != EINPROGRESS) {
+        close(sockfd);
+        return NO;
+    }
+
+    fd_set writefds;
+    FD_ZERO(&writefds);
+    FD_SET(sockfd, &writefds);
+
+    struct timeval timeout;
+    timeout.tv_sec = timeoutMs / 1000;
+    timeout.tv_usec = (timeoutMs % 1000) * 1000;
+
+    int selectResult = select(sockfd + 1, NULL, &writefds, NULL, &timeout);
+    if (selectResult <= 0) {
+        close(sockfd);
+        return NO;
+    }
+
+    int socketError = 0;
+    socklen_t len = sizeof(socketError);
+    if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &socketError, &len) < 0) {
+        close(sockfd);
+        return NO;
+    }
+
+    close(sockfd);
+    return socketError == 0;
 }
 
 - (void)handlePrinterConnectedNotification:(NSNotification*)notification

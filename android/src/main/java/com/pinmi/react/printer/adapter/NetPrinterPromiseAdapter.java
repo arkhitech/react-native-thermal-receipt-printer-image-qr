@@ -43,13 +43,14 @@ import androidx.annotation.RequiresApi;
 public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
     private static NetPrinterPromiseAdapter mInstance;
     private ReactApplicationContext mContext;
-    private final String LOG_TAG = "RNNetPrinter";
+    private final String LOG_TAG = "RNNetPrinterPromise";
     private NetPrinterDevice mNetDevice;
 
     // {TODO- support other ports later}
 
     private final int[] PRINTER_ON_PORTS = {9100};
     private static final String EVENT_SCANNER_RESOLVED = "scannerResolved";
+    private static final String EVENT_SCANNER_PARTIAL = "scannerFoundDevice";
     private static final String EVENT_SCANNER_RUNNING = "scannerRunning";
 
     private final static char ESC_CHAR = 0x1B;
@@ -122,18 +123,30 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
                         Log.i(LOG_TAG, "Scanning address: " + prefix + i);
                         ArrayList<Integer> ports = getAvailablePorts(prefix + i);
                         if (!ports.isEmpty()) {
-                            WritableMap payload = Arguments.createMap();
+                            WritableMap payloadEvent = Arguments.createMap();
+                            payloadEvent.putString("host", prefix + i);
+                            payloadEvent.putInt("port", 9100);
+                            arrayEvent.pushMap(payloadEvent);
 
-                            payload.putString("host", prefix + i);
-                            payload.putInt("port", 9100);
+                            WritableArray arrayEventPartial = Arguments.createArray();
+                            WritableMap payloadEventPartial = Arguments.createMap();
+                            payloadEventPartial.putString("host", prefix + i);
+                            payloadEventPartial.putInt("port", 9100);
+                            arrayEventPartial.pushMap(payloadEventPartial);
+                            Log.i(LOG_TAG, "Emitting scan resolved for partial proper");
+                            //emitEvent(EVENT_SCANNER_PARTIAL, arrayEventPartial);
+                            emitEvent(EVENT_SCANNER_RESOLVED, arrayEventPartial);
 
-                            arrayEvent.pushMap(payload);
-                            arrayPromise.pushMap(payload);
+                            WritableMap payloadPromise = Arguments.createMap();
+                            payloadPromise.putString("host", prefix + i);
+                            payloadPromise.putInt("port", 9100);
+                            arrayPromise.pushMap(payloadPromise);
+                            
                         }
                     }
 
-                    Log.i(LOG_TAG, "Emitting scan resolved");
-                    emitEvent(EVENT_SCANNER_RESOLVED, arrayEvent);
+                    //Log.i(LOG_TAG, "Emitting scan resolved");
+                    //emitEvent(EVENT_SCANNER_RESOLVED, arrayEvent);
                     Log.i(LOG_TAG, "Resolving scan array");
                     promise.resolve(arrayPromise);
                 } catch (NullPointerException ex) {
@@ -433,6 +446,15 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
                             payloadEvent.putInt("port", port);
                             arrayEvent.pushMap(payloadEvent);
 
+                            WritableArray arrayEventPartial = Arguments.createArray();
+                            WritableMap payloadEventPartial = Arguments.createMap();
+                            payloadEventPartial.putString("host", host);
+                            payloadEventPartial.putInt("port", port);
+                            arrayEventPartial.pushMap(payloadEventPartial);
+                            Log.i(LOG_TAG, "Emitting scan resolved for partial");
+                            //emitEvent(EVENT_SCANNER_PARTIAL, arrayEventPartial);
+                            emitEvent(EVENT_SCANNER_RESOLVED, arrayEventPartial);
+
                             WritableMap payloadPromise = Arguments.createMap();
                             payloadPromise.putString("host", host);
                             payloadPromise.putInt("port", port);
@@ -440,8 +462,8 @@ public class NetPrinterPromiseAdapter implements PrinterPromiseAdapter {
                         }
                     }
 
-                    Log.i(LOG_TAG, "Emitting All Network Devices scan");
-                    emitEvent(EVENT_SCANNER_RESOLVED, arrayEvent);
+                    //Log.i(LOG_TAG, "Emitting All Network Devices scan");
+                    //emitEvent(EVENT_SCANNER_RESOLVED, arrayEvent);
                     Log.i(LOG_TAG, "Resolving All Network Devices scan");
                     promise.resolve(arrayPromise);
                 } catch (NullPointerException ex) {
